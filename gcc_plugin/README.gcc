@@ -1,9 +1,9 @@
-============================================
-Fast LLVM-based instrumentation for afl-fuzz
-============================================
+===========================================
+Fast GCC-based instrumentation for afl-fuzz
+===========================================
 
   (See ../docs/README for the general instruction manual.)
-  (See ../gcc_plugin/README.gcc for the GCC-based instrumentation.)
+  (See ../llvm_mode/README.llvm for the LLVM-based instrumentation.)
 
 1) Introduction
 ---------------
@@ -23,15 +23,13 @@ several interesting properties:
 
   - The instrumentation is CPU-independent. At least in principle, you should
     be able to rely on it to fuzz programs on non-x86 architectures (after
-    building afl-fuzz with AFL_NO_X86=1).
+    building afl-fuzz with AFL_NOX86=1).
 
-  - The instrumentation can cope a bit better with multi-threaded targets.
-
-  - Because the feature relies on the internals of LLVM, it is clang-specific
-    and will *not* work with GCC (see ../gcc_plugin for an alternative).
+  - Because the feature relies on the internals of GCC, it is gcc-specific
+    and will *not* work with LLVM (see ../llvm_plugin for an alternative).
 
 Once this implementation is shown to be sufficiently robust and portable, it
-will probably replace afl-clang. For now, it can be built separately and
+will probably replace afl-gcc. For now, it can be built separately and
 co-exists with the original code.
 
 The idea and much of the implementation comes from Laszlo Szekeres.
@@ -39,38 +37,25 @@ The idea and much of the implementation comes from Laszlo Szekeres.
 2) How to use
 -------------
 
-In order to leverage this mechanism, you need to have clang installed on your
-system. You should also make sure that the llvm-config tool is in your path
-(or pointed to via LLVM_CONFIG in the environment).
-
-Unfortunately, some systems that do have clang come without llvm-config or the
-LLVM development headers; one example of this is FreeBSD. FreeBSD users will
-also run into problems with clang being built statically and not being able to
-load modules (you'll see "Service unavailable" when loading afl-llvm-pass.so).
-
-To solve all your problems, you can grab pre-built binaries for your OS from:
-
-  http://llvm.org/releases/download.html
-
-...and then put the bin/ directory from the tarball at the beginning of your
-$PATH when compiling the feature and building packages later on. You don't need
-to be root for that.
+In order to leverage this mechanism, you need to have GCC and the plugin headers
+installed on your system. That should be all you need. On Debian machines, these
+headers can be acquired by installing the `gcc-<VERSION>-plugin-dev` packages.
 
 To build the instrumentation itself, type 'make'. This will generate binaries
-called afl-clang-fast and afl-clang-fast++ in the parent directory. Once this
+called afl-gcc-fast and afl-g++-fast in the parent directory. Once this
 is done, you can instrument third-party code in a way similar to the standard
 operating mode of AFL, e.g.:
 
-  CC=/path/to/afl/afl-clang-fast ./configure [...options...]
+  CC=/path/to/afl/afl-gcc-fast ./configure [...options...]
   make
 
-Be sure to also include CXX set to afl-clang-fast++ for C++ code.
+Be sure to also include CXX set to afl-g++-fast for C++ code.
 
 The tool honors roughly the same environmental variables as afl-gcc (see
 ../docs/env_variables.txt). This includes AFL_INST_RATIO, AFL_USE_ASAN,
 AFL_HARDEN, and AFL_DONT_OPTIMIZE.
 
-Note: if you want the LLVM helper to be installed on your system for all
+Note: if you want the GCC plugin to be installed on your system for all
 users, you need to build it before issuing 'make install' in the parent
 directory.
 
@@ -78,7 +63,7 @@ directory.
 --------------------------
 
 This is an early-stage mechanism, so field reports are welcome. You can send bug
-reports to <afl-users@googlegroups.com>.
+reports to <aseipp@pobox.com>.
 
 4) Bonus feature #1: deferred instrumentation
 ---------------------------------------------
@@ -98,7 +83,7 @@ to read the fuzzed input and parse it; in some cases, this can offer a 10x+
 performance gain. You can implement delayed initialization in LLVM mode in a
 fairly simple way.
 
-First, find a suitable location in the code where the delayed cloning can 
+First, locate a suitable location in the code where the delayed cloning can
 take place. This needs to be done with *extreme* care to avoid breaking the
 binary. In particular, the program will probably malfunction if you select
 a location after:
@@ -121,10 +106,10 @@ With the location selected, add this code in the appropriate spot:
   __AFL_INIT();
 #endif
 
-You don't need the #ifdef guards, but including them ensures that the program
-will keep working normally when compiled with a tool other than afl-clang-fast.
+You don't need the #ifdef guards, but they will make the program still work as
+usual when compiled with a tool other than afl-gcc-fast/afl-clang-fast.
 
-Finally, recompile the program with afl-clang-fast (afl-gcc or afl-clang will
+Finally, recompile the program with afl-gcc-fast (afl-gcc or afl-clang will
 *not* generate a deferred-initialization binary) - and you should be all set!
 
 5) Bonus feature #2: persistent mode
@@ -149,43 +134,24 @@ The basic structure of the program that does this would be:
 
 The numerical value specified within the loop controls the maximum number
 of iterations before AFL will restart the process from scratch. This minimizes
-the impact of memory leaks and similar glitches; 1000 is a good starting point,
-and going much higher increases the likelihood of hiccups without giving you
-any real performance benefits.
+the impact of memory leaks and similar glitches; 1000 is a good starting point.
 
 A more detailed template is shown in ../experimental/persistent_demo/.
-Similarly to the previous mode, the feature works only with afl-clang-fast;
-#ifdef guards can be used to suppress it when using other compilers.
+Similarly to the previous mode, the feature works only with afl-gcc-fast or
+afl-clang-fast; #ifdef guards can be used to suppress it when using other
+compilers.
 
 Note that as with the previous mode, the feature is easy to misuse; if you
-do not fully reset the critical state, you may end up with false positives or
+do not reset the critical state fully, you may end up with false positives or
 waste a whole lot of CPU power doing nothing useful at all. Be particularly
-wary of memory leaks and of the state of file descriptors.
+wary of memory leaks and the state of file descriptors.
+
+When running in this mode, the execution paths will inherently vary a bit
+depending on whether the input loop is being entered for the first time or
+executed again. To avoid spurious warnings, the feature implies
+AFL_NO_VAR_CHECK and hides the "variable path" warnings in the UI.
 
 PS. Because there are task switches still involved, the mode isn't as fast as
 "pure" in-process fuzzing offered, say, by LLVM's LibFuzzer; but it is a lot
 faster than the normal fork() model, and compared to in-process fuzzing,
 should be a lot more robust.
-
-6) Bonus feature #3: new 'trace-pc-guard' mode
-----------------------------------------------
-
-Recent versions of LLVM are shipping with a built-in execution tracing feature
-that provides AFL with the necessary tracing data without the need to
-post-process the assembly or install any compiler plugins. See:
-
-  http://clang.llvm.org/docs/SanitizerCoverage.html#tracing-pcs-with-guards
-
-As of this writing, the feature is only available on SVN trunk, and is yet to
-make it to an official release of LLVM. Nevertheless, if you have a
-sufficiently recent compiler and want to give it a try, build afl-clang-fast
-this way:
-
-  AFL_TRACE_PC=1 make clean all
-
-Note that this mode is currently about 20% slower than "vanilla" afl-clang-fast,
-and about 5-10% slower than afl-clang. This is likely because the
-instrumentation is not inlined, and instead involves a function call. On systems
-that support it, compiling your target with -flto should help.
-
-
