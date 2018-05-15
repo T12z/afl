@@ -48,11 +48,16 @@
 #include <diagnostic.h>
 #include <gimple.h>
 #include <tree.h>
-#include <tree-flow.h>
+#include <tree-ssa.h>
 #include <tree-pass.h>
 #include <version.h>
 #include <toplev.h>
 #include <intl.h>
+
+/* Eclipse Hack */
+#ifndef VERSION
+#define VERSION "X"
+#endif
 
 /* -------------------------------------------------------------------------- */
 /* -- AFL instrumentation pass ---------------------------------------------- */
@@ -216,30 +221,12 @@ static unsigned int inline_instrument(void)
 /* -------------------------------------------------------------------------- */
 /* -- Boilerplate and initialization ---------------------------------------- */
 
-#if BUILDING_GCC_VERSION >= 4009
 static const struct pass_data afl_pass_data = {
-#else
-static struct gimple_opt_pass afl_pass = {
-        .pass = {
-#endif
 
                 .type                   = GIMPLE_PASS,
                 .name                   = "afl-inst",
-#if BUILDING_GCC_VERSION >= 4008
                 .optinfo_flags          = OPTGROUP_NONE,
-#endif
-#if BUILDING_GCC_VERSION >= 5000
-#elif BUILDING_GCC_VERSION >= 4009
-                .has_gate               = false,
-                .has_execute            = true,
-#else
-                .gate                   = NULL,
-                .execute                = ext_call_instrument,
-//              .execute                = inline_instrument,
-                .sub                    = NULL,
-                .next                   = NULL,
-                .static_pass_number     = 0,
-#endif
+
                 .tv_id                  = TV_NONE,
                 .properties_required    = 0,
                 .properties_provided    = 0,
@@ -247,44 +234,28 @@ static struct gimple_opt_pass afl_pass = {
                 .todo_flags_start       = 0,
                 // NOTE(aseipp): it's very, very important to include
                 // at least 'TODO_update_ssa' here so that GCC will
-                // properly update the resulting SSA form e.g. to
+                // properly update the resulting SSA form, e.g., to
                 // include new PHI nodes for newly added symbols or
                 // names. Do not remove this. Do not taunt Happy Fun
                 // Ball.
-                .todo_flags_finish      =
-                  TODO_update_ssa | TODO_verify_ssa | TODO_cleanup_cfg,
-#if BUILDING_GCC_VERSION < 4009
-        }
-#endif
+                .todo_flags_finish      = TODO_update_ssa | TODO_verify_ssa | TODO_cleanup_cfg,
 };
 
-#if BUILDING_GCC_VERSION >= 4009
 namespace {
+
 class afl_pass : public gimple_opt_pass {
 public:
-  afl_pass()
-    : gimple_opt_pass(afl_pass_data, g)
-  {}
+	afl_pass() : gimple_opt_pass(afl_pass_data, g) {}
 
-#if BUILDING_GCC_VERSION >= 5000
-  virtual unsigned int execute(function *)
-#else
-  unsigned int execute()
-#endif
-  {
-    return instrument();
-  }
+	virtual unsigned int execute(function *) {
+		return instrument();
+	}
 }; /* class afl_pass */
-}  /* anon namespace */
-#endif
 
-static struct opt_pass *make_afl_pass(void)
-{
-#if BUILDING_GCC_VERSION >= 4009
-        return new afl_pass();
-#else
-        return &afl_pass.pass;
-#endif
+}  /* anon namespace */
+
+static struct opt_pass *make_afl_pass(void) {
+	return new afl_pass();
 }
 
 /* -------------------------------------------------------------------------- */
@@ -293,7 +264,7 @@ static struct opt_pass *make_afl_pass(void)
 int plugin_is_GPL_compatible = 1;
 
 static struct plugin_info afl_plugin_info = {
-  .version = "20150920",
+  .version = "20180600",
   .help    = "AFL gcc plugin\n",
 };
 

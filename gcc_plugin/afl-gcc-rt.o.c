@@ -213,7 +213,7 @@ void __afl_manual_init(void) {
 
 /* Proper initialization routine. */
 
-__attribute__((constructor(0))) void __afl_auto_init(void) {
+__attribute__((constructor(101))) void __afl_auto_init(void) {
 
   is_persistent = !!getenv(PERSIST_ENV_VAR);
 
