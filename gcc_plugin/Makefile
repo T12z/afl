@@ -33,8 +33,8 @@ CXXFLAGS    ?= -O3 -funroll-loops
 CXXFLAGS    += -Wall -D_FORTIFY_SOURCE=2 -g \
                -DVERSION=\"$(VERSION)\"
 
-CC           = gcc
-CXX          = g++
+CC          ?= gcc
+CXX         ?= g++
 
 PLUGIN_FLAGS = -fPIC -I"$(shell $(CC) -print-file-name=plugin)/include"
 
