@@ -24,19 +24,18 @@ BIN_PATH     = $(PREFIX)/bin
 
 VERSION      = $(shell grep ^VERSION ../Makefile | cut -d= -f2 | sed 's/ //')
 
-CFLAGS      ?= -O3 -funroll-loops
-CFLAGS      += -Wall -D_FORTIFY_SOURCE=2 -g -Wno-pointer-sign \
+CFLAGS      ?= -O3 -g -funroll-loops
+CFLAGS      += -Wall -D_FORTIFY_SOURCE=2 -Wno-pointer-sign \
                -DAFL_PATH=\"$(HELPER_PATH)\" -DBIN_PATH=\"$(BIN_PATH)\" \
                -DVERSION=\"$(VERSION)\"
 
-CXXFLAGS    ?= -O3 -funroll-loops
-CXXFLAGS    += -Wall -D_FORTIFY_SOURCE=2 -g \
-               -DVERSION=\"$(VERSION)\"
+CXXFLAGS	?= -O3 -g -funroll-loops
+CXXEFLAGS   := $(CXXFLAGS) -Wall -D_FORTIFY_SOURCE=2 -DVERSION=\"$(VERSION)\"
 
 CC          ?= gcc
 CXX         ?= g++
 
-PLUGIN_FLAGS = -fPIC -I"$(shell $(CC) -print-file-name=plugin)/include"
+PLUGIN_FLAGS = -fPIC -fno-rtti -I"$(shell $(CC) -print-file-name=plugin)/include"
 
 PROGS        = ../afl-gcc-fast ../afl-gcc-pass.so ../afl-gcc-rt.o
 
@@ -54,14 +53,15 @@ test_deps:
 	ln -sf afl-gcc-fast ../afl-g++-fast
 
 ../afl-gcc-pass.so: afl-gcc-pass.so.cc | test_deps
-	$(CXX) $(CXXFLAGS) $(PLUGIN_FLAGS) -shared $< -o $@
+	$(CXX) $(CXXEFLAGS) $(PLUGIN_FLAGS) -shared $< -o $@
 
 ../afl-gcc-rt.o: afl-gcc-rt.o.c | test_deps
 	$(CC) $(CFLAGS) -fPIC -c $< -o $@
 
 test_build: $(PROGS)
 	@echo "[*] Testing the CC wrapper and instrumentation output..."
-	unset AFL_USE_ASAN AFL_USE_MSAN; AFL_QUIET=1 AFL_INST_RATIO=100 AFL_PATH=. AFL_CC=$(CC) ../afl-gcc-fast $(CFLAGS) ../test-instr.c -o test-instr $(LDFLAGS)
+#	unset AFL_USE_ASAN AFL_USE_MSAN; AFL_QUIET=1 AFL_INST_RATIO=100 AFL_PATH=. AFL_CC=$(CC) ../afl-gcc-fast $(CFLAGS) ../test-instr.c -o test-instr $(LDFLAGS)
+	unset AFL_USE_ASAN AFL_USE_MSAN;             AFL_INST_RATIO=100 AFL_PATH=. AFL_CC=$(CC) ../afl-gcc-fast $(CFLAGS) ../test-instr.c -o test-instr $(LDFLAGS)
 	echo 0 | ../afl-showmap -m none -q -o .test-instr0 ./test-instr
 	echo 1 | ../afl-showmap -m none -q -o .test-instr1 ./test-instr
 	@rm -f test-instr
