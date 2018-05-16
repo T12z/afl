@@ -269,7 +269,11 @@ int main(int argc, char** argv) {
   find_obj(argv[0]);
 
   edit_params(argc, argv);
-
+/*if (isatty(2) && !getenv("AFL_QUIET")) {
+	  printf("Calling \"%s\" with:\n", cc_params[0]);
+	  for(int i=1; i<cc_par_cnt; i++) printf("%s\n", cc_params[i]);
+  }
+*/
   execvp(cc_params[0], (char**)cc_params);
 
   FATAL("Oops, failed to execute '%s' - check your PATH", cc_params[0]);
