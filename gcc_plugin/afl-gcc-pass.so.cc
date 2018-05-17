@@ -70,6 +70,7 @@
 static int be_quiet = 0;
 static unsigned int inst_ratio = 100;
 static int inst_blocks = 0;
+static bool inst_ext = true; /* I reckon inline is broken / unfunctional */
 
 static unsigned int ext_call_instrument(function *fun) {
 	/* Instrument all the things! */
@@ -82,7 +83,7 @@ static unsigned int ext_call_instrument(function *fun) {
 		gimple_seq seq = NULL;
 		gimple_stmt_iterator bentry;
 
-		fcnt_blocks++;
+		if (!fcnt_blocks++) continue; /* skip block 0 */
 
 		/* Bail on this block if we trip the specified ratio */
 		if (R(100) >= inst_ratio) continue;
@@ -109,7 +110,7 @@ static unsigned int ext_call_instrument(function *fun) {
 		DECL_ARTIFICIAL(fndecl) = 1; /* Injected by compiler */
 
 		fcall = gimple_build_call(fndecl, 1, cur_loc);  /* generate the function _call_ to above built reference, with *1* parameter -> the random const for the location */
-		//gimple_seq_add_stmt(&seq, fcall); /* and insert into a sequence */
+		gimple_seq_add_stmt(&seq, fcall); /* and insert into a sequence */
 
 		/* Done - grab the entry to the block and insert sequence */
 		bentry = gsi_start_bb(bb);
@@ -118,6 +119,7 @@ static unsigned int ext_call_instrument(function *fun) {
 		inst_blocks++;
 		finst_blocks++;
 	}
+	fcnt_blocks--; /* discard the first in the count */
 
 	/* Say something nice. */
 	if (!be_quiet) {
@@ -140,6 +142,8 @@ static unsigned int ext_call_instrument(function *fun) {
 static unsigned int inline_instrument(function *fun) {
 	/* Instrument all the things! */
 	basic_block bb;
+	unsigned finst_blocks = 0;
+	unsigned fcnt_blocks = 0;
 
 	/* Set up global type declarations */
 	tree map_type = build_pointer_type(unsigned_char_type_node);
@@ -166,10 +170,10 @@ static unsigned int inline_instrument(function *fun) {
 		gimple_seq seq = NULL;
 		gimple_stmt_iterator bentry;
 
-		/* Bail on this block if we trip the specified ratio */
+		if (!fcnt_blocks++) continue; /* skip block 0 */
 
-		if (R(100) >= inst_ratio)
-			continue;
+		/* Bail on this block if we trip the specified ratio */
+		if (R(100) >= inst_ratio) continue;
 
 		/* Make up cur_loc */
 
@@ -192,8 +196,7 @@ static unsigned int inline_instrument(function *fun) {
 		gimple_seq_add_stmt(&seq, g); // tmp1 = __afl_area_ptr + area_off
 
 		tree tmp2 = create_tmp_var(unsigned_char_type_node, "tmp2");
-		tree deref1 = build_fold_indirect_ref(tmp1);
-		g = gimple_build_assign(tmp2, INIT_EXPR, deref1);
+		g = gimple_build_assign(tmp2, INIT_EXPR, build_fold_indirect_ref(tmp1));
 		gimple_seq_add_stmt(&seq, g); // tmp2 = *tmp1
 
 		tree tmp3 = create_tmp_var(unsigned_char_type_node, "tmp3");
@@ -220,17 +223,22 @@ static unsigned int inline_instrument(function *fun) {
 		gsi_insert_seq_before(&bentry, seq, GSI_SAME_STMT);
 
 		inst_blocks++;
+		finst_blocks++;
 	}
 
 	/* Say something nice. */
 	if (!be_quiet) {
-		if (!inst_blocks)
-			WARNF(G_("No instrumentation targets found."));
+		if (!finst_blocks)
+			WARNF(G_("No instrumentation targets found in " cBRI "%s" cRST ),
+					function_name(fun));
+		else if (finst_blocks < fcnt_blocks)
+			OKF(G_("Instrumented %2u /%2u locations in " cBRI "%s" cRST ),
+					finst_blocks, fcnt_blocks,
+					function_name(fun));
 		else
-			OKF(G_("Instrumented %u locations (%s mode, ratio %u%%)."),
-					inst_blocks,
-					getenv("AFL_HARDEN") ? G_("hardened") : G_("non-hardened"),
-					inst_ratio);
+			OKF(G_("Instrumented   %2u   locations in " cBRI "%s" cRST ),
+					finst_blocks,
+					function_name(fun));
 	}
 
 	return 0;
@@ -305,7 +313,7 @@ int plugin_init(struct plugin_name_args *plugin_info,
 	srandom(rand_seed);
 
 	/* Pass information */
-	afl_pass_info.pass = make_afl_pass(true, g);
+	afl_pass_info.pass = make_afl_pass(inst_ext, g);
 	afl_pass_info.reference_pass_name = "ssa";
 	afl_pass_info.ref_pass_instance_number = 1;
 	afl_pass_info.pos_op = PASS_POS_INSERT_AFTER;
@@ -328,7 +336,8 @@ int plugin_init(struct plugin_name_args *plugin_info,
 			FATAL(G_("Bad value of AFL_INST_RATIO (must be between 1 and 100)"));
 		else {
 			if (!be_quiet)
-				ACTF(G_("Instrumention ratio %u%% in %s mode."),
+				ACTF(G_("%s instrumentation at ratio of %u%% in %s mode."),
+					inst_ext ? G_("Call-based") : G_("Inline"),
 					inst_ratio,
 					getenv("AFL_HARDEN") ? G_("hardened") : G_("non-hardened"));
 		}
