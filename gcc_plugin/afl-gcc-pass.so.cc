@@ -59,11 +59,6 @@
 #include <context.h>
 #include <stringpool.h>
 
-/* Eclipse Hack */
-#ifndef VERSION
-#define VERSION "X"
-#endif
-
 /* -------------------------------------------------------------------------- */
 /* -- AFL instrumentation pass ---------------------------------------------- */
 
@@ -324,7 +319,7 @@ int plugin_init(struct plugin_name_args *plugin_info,
 
 	/* Show a banner */
 	if (isatty(2) && !getenv("AFL_QUIET")) {
-		SAYF(G_(cCYA "afl-gcc-pass " cBRI VERSION cRST " by <aseipp@pobox.com>, updated by <thorsten.schulz@uni-rostock.de>\n"));
+		SAYF(G_(cCYA "afl-gcc-pass" cRST " initial version 1.94 by <aseipp@pobox.com>, updated to " cBRI VERSION cRST " by <thorsten.schulz@uni-rostock.de>\n"));
 	} else
 		be_quiet = 1;
 

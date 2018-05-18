@@ -239,7 +239,7 @@ int main(int argc, char** argv) {
 
   if (isatty(2) && !getenv("AFL_QUIET")) {
 
-    SAYF(cCYA "afl-gcc-fast " cBRI VERSION  cRST " by <aseipp@pobox.com>\n");
+    SAYF(cCYA "afl-gcc-fast" cRST " initial version 1.94 by <aseipp@pobox.com>, updated to " cBRI VERSION cRST " by <thorsten.schulz@uni-rostock.de>\n");
 
   }
 

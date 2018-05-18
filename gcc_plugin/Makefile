@@ -22,15 +22,12 @@ PREFIX      ?= /usr/local
 HELPER_PATH  = $(PREFIX)/lib/afl
 BIN_PATH     = $(PREFIX)/bin
 
-VERSION      = $(shell grep ^VERSION ../Makefile | cut -d= -f2 | sed 's/ //')
-
 CFLAGS      ?= -O3 -g -funroll-loops
 CFLAGS      += -Wall -D_FORTIFY_SOURCE=2 -Wno-pointer-sign \
                -DAFL_PATH=\"$(HELPER_PATH)\" -DBIN_PATH=\"$(BIN_PATH)\" \
-               -DVERSION=\"$(VERSION)\"
 
 CXXFLAGS	?= -O3 -g -funroll-loops
-CXXEFLAGS   := $(CXXFLAGS) -Wall -D_FORTIFY_SOURCE=2 -DVERSION=\"$(VERSION)\"
+CXXEFLAGS   := $(CXXFLAGS) -Wall -D_FORTIFY_SOURCE=2
 
 CC          ?= gcc
 CXX         ?= g++
