@@ -58,6 +58,8 @@
 #include <intl.h>
 #include <context.h>
 #include <stringpool.h>
+#include <cgraph.h>
+#include <cfgloop.h>
 
 /* -------------------------------------------------------------------------- */
 /* -- AFL instrumentation pass ---------------------------------------------- */
@@ -74,7 +76,7 @@ static unsigned int ext_call_instrument(function *fun) {
 	unsigned fcnt_blocks = 0;
 
 	FOR_ALL_BB_FN(bb, fun) {
-		gimple *fcall = NULL;
+		gcall *fcall = NULL;
 		gimple_seq seq = NULL;
 		gimple_stmt_iterator bentry;
 
@@ -142,8 +144,7 @@ static unsigned int inline_instrument(function *fun) {
 
 	/* Set up global type declarations */
 	tree map_type = build_pointer_type(unsigned_char_type_node);
-	tree map_ptr_g = build_decl(BUILTINS_LOCATION, VAR_DECL,
-			get_identifier("__afl_area_ptr"), map_type);
+	tree map_ptr_g = build_decl(UNKNOWN_LOCATION, VAR_DECL, get_identifier_with_length("__afl_area_ptr",14), map_type);
 	TREE_USED(map_ptr_g) = 1;
 	TREE_STATIC(map_ptr_g) = 1; /* Defined elsewhere */
 	DECL_EXTERNAL(map_ptr_g) = 1; /* External linkage */
@@ -151,8 +152,7 @@ static unsigned int inline_instrument(function *fun) {
 	DECL_ARTIFICIAL(map_ptr_g) = 1;
 	rest_of_decl_compilation(map_ptr_g, 1, 0);
 
-	tree prev_loc_g = build_decl(BUILTINS_LOCATION, VAR_DECL,
-			get_identifier("__afl_prev_loc"), uint16_type_node);
+	tree prev_loc_g = build_decl(UNKNOWN_LOCATION, VAR_DECL, get_identifier_with_length("__afl_prev_loc",14), uint16_type_node);
 	TREE_USED(prev_loc_g) = 1;
 	TREE_STATIC(prev_loc_g) = 1; /* Defined elsewhere */
 	DECL_EXTERNAL(prev_loc_g) = 1; /* External linkage */
@@ -183,28 +183,32 @@ static unsigned int inline_instrument(function *fun) {
 
 		/* Update bitmap */
 
-		tree zero = build_int_cst(unsigned_char_type_node, 0);
+//		tree zero = build_int_cst(unsigned_char_type_node, 0);
 		tree one = build_int_cst(unsigned_char_type_node, 1);
 
 		tree tmp1 = create_tmp_var(map_type, "tmp1");
 		g = gimple_build_assign(tmp1, PLUS_EXPR, map_ptr_g, area_off);
 		gimple_seq_add_stmt(&seq, g); // tmp1 = __afl_area_ptr + area_off
+		SAYF(G_("%d,"), fcnt_blocks);
 
 		tree tmp2 = create_tmp_var(unsigned_char_type_node, "tmp2");
-		g = gimple_build_assign(tmp2, INIT_EXPR, build_fold_indirect_ref(tmp1));
+		//tree tmp1_ptr = build_simple_mem_ref_loc(UNKNOWN_LOCATION, tmp1);
+		g = gimple_build_assign(tmp2, INDIRECT_REF, tmp1);
 		gimple_seq_add_stmt(&seq, g); // tmp2 = *tmp1
 
 		tree tmp3 = create_tmp_var(unsigned_char_type_node, "tmp3");
 		g = gimple_build_assign(tmp3, PLUS_EXPR, tmp2, one);
 		gimple_seq_add_stmt(&seq, g); // tmp3 = tmp2 + 1
 
-		tree tmp4 = create_tmp_var(map_type, "tmp4");
-		g = gimple_build_assign(tmp4, PLUS_EXPR, map_ptr_g, area_off);
-		gimple_seq_add_stmt(&seq, g); // tmp4 = __afl_area_ptr + area_off
+//		tree tmp4 = create_tmp_var(map_type, "tmp4");
+//		g = gimple_build_assign(tmp4, PLUS_EXPR, map_ptr_g, area_off);
+//		gimple_seq_add_stmt(&seq, g); // tmp4 = __afl_area_ptr + area_off
 
-		tree deref2 = build2(MEM_REF, map_type, tmp4, zero);
+//		tree deref2 = build2(MEM_REF, map_type, tmp4, zero);
+		tree deref2 = build4(ARRAY_REF, map_type, map_ptr_g, area_off, NULL, NULL);
 		g = gimple_build_assign(deref2, MODIFY_EXPR, tmp3);
-		//gimple_seq_add_stmt(&seq, g); // *tmp4 = tmp3
+		gimple_seq_add_stmt(&seq, g); // *tmp4 = tmp3
+		SAYF(G_("+%d,"), fcnt_blocks);
 
 		/* Set prev_loc to cur_loc >> 1 */
 
@@ -296,7 +300,6 @@ static struct plugin_info afl_plugin_info = {
 int plugin_init(struct plugin_name_args *plugin_info,
                 struct plugin_gcc_version *version) {
 
-	const char * const pname = plugin_info->base_name;
 	struct register_pass_info afl_pass_info;
 	struct timeval tv;
 	struct timezone tz;
@@ -339,7 +342,7 @@ int plugin_init(struct plugin_name_args *plugin_info,
 	}
 
 	/* Go go gadget */
-	register_callback(pname, PLUGIN_INFO, NULL, &afl_plugin_info);
-	register_callback(pname, PLUGIN_PASS_MANAGER_SETUP, NULL, &afl_pass_info);
+	register_callback(plugin_info->base_name, PLUGIN_INFO, NULL, &afl_plugin_info);
+	register_callback(plugin_info->base_name, PLUGIN_PASS_MANAGER_SETUP, NULL, &afl_pass_info);
 	return 0;
 }
