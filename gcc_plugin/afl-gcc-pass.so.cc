@@ -38,8 +38,19 @@
 
  */
 
+//#define BUILD_INLINE_INST
+
 #include "../config.h"
 #include "../debug.h"
+
+/* clear helper AFL types pulls in, which intervene with gcc-plugin geaders from GCC-8 */
+#ifdef likely
+#undef likely
+#endif
+#ifdef unlikely
+#undef unlikely
+#endif
+
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -51,6 +62,9 @@
 #include <tree.h>
 #include <tree-ssa.h>
 #include <tree-pass.h>
+#include <tree-ssa-alias.h>
+#include <basic-block.h>
+#include <gimple-expr.h>
 #include <gimple.h>
 #include <gimple-iterator.h>
 #include <version.h>
@@ -66,8 +80,8 @@
 
 static int be_quiet = 0;
 static unsigned int inst_ratio = 100;
-static int inst_blocks = 0;
 static bool inst_ext = true; /* I reckon inline is broken / unfunctional */
+
 
 static unsigned int ext_call_instrument(function *fun) {
 	/* Instrument all the things! */
@@ -76,7 +90,7 @@ static unsigned int ext_call_instrument(function *fun) {
 	unsigned fcnt_blocks = 0;
 
 	FOR_ALL_BB_FN(bb, fun) {
-		gcall *fcall = NULL;
+		gimple_seq fcall;
 		gimple_seq seq = NULL;
 		gimple_stmt_iterator bentry;
 
@@ -113,7 +127,6 @@ static unsigned int ext_call_instrument(function *fun) {
 		bentry = gsi_start_bb(bb);
 		gsi_insert_seq_before(&bentry, seq, GSI_SAME_STMT);
 
-		inst_blocks++;
 		finst_blocks++;
 	}
 	fcnt_blocks--; /* discard the first in the count */
@@ -137,6 +150,7 @@ static unsigned int ext_call_instrument(function *fun) {
 }
 
 static unsigned int inline_instrument(function *fun) {
+#ifdef BUILD_INLINE_INST   /* ifdef inline away, so I don't have to refactor it */
 	/* Instrument all the things! */
 	basic_block bb;
 	unsigned finst_blocks = 0;
@@ -240,9 +254,9 @@ static unsigned int inline_instrument(function *fun) {
 					function_name(fun));
 	}
 
+#endif
 	return 0;
 }
-
 
 /* -------------------------------------------------------------------------- */
 /* -- Boilerplate and initialization ---------------------------------------- */
@@ -293,7 +307,7 @@ static struct opt_pass *make_afl_pass(bool ext_call, gcc::context *ctxt) {
 int plugin_is_GPL_compatible = 1;
 
 static struct plugin_info afl_plugin_info = {
-  .version = "20180600",
+  .version = "20181200",
   .help    = "AFL gcc plugin\n",
 };
 
