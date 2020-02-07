@@ -9,6 +9,7 @@ afl-gcc
 afl-gcc-fast
 *.so
 *.o
+.settings
 afl-gotcpu
 afl-showmap
 afl-tmin
